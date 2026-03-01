@@ -17,24 +17,34 @@ async function onLocationSubmit({ lat, lon, elevation, yearsBack }) {
   loading.value = true
   error.value = ''
   result.value = null
-  const today = new Date().toISOString().slice(0, 10)
 
   try {
-    const [forecast, archiveList] = await Promise.all([
-      fetchForecast({ lat, lon, elevation }),
-      fetchArchiveSameDay({ lat, lon, elevation, date: today, yearsBack }),
-    ])
+    // 先拉预报；API 的 hourly.time 是当地时区，用其日期避免 UTC 与当地日期不一致
+    const forecast = await fetchForecast({ lat, lon, elevation })
+    const queryDate =
+      forecast.hourly?.time?.[0]?.slice(0, 10) ||
+      new Date().toISOString().slice(0, 10)
 
-    const todayMetrics = aggregateDayMetrics(forecast.hourly, today)
+    const todayMetrics = aggregateDayMetrics(forecast.hourly, queryDate)
     if (!todayMetrics) {
       error.value = '无法解析今日小时数据'
       return
     }
 
-    const historyMetricsList = archiveList.map((ar) =>
-      aggregateDayMetrics(ar.hourly, today)
-    )
-    const percentiles = computePercentiles(todayMetrics, historyMetricsList)
+    const { list: archiveList, requested: archiveRequested } = await fetchArchiveSameDay({
+      lat,
+      lon,
+      elevation,
+      date: queryDate,
+      yearsBack,
+    })
+    // 每年 archive 返回的是该年当日，需用该条数据的日期做聚合（不能用 queryDate）
+    const historyMetricsList = archiveList.map((ar) => {
+      const dateInArchive = ar.hourly?.time?.[0]?.slice(0, 10)
+      return aggregateDayMetrics(ar.hourly, dateInArchive || queryDate)
+    })
+    const validHistory = historyMetricsList.filter(Boolean)
+    const percentiles = computePercentiles(todayMetrics, validHistory)
     const { score, level } = compositeRisk(percentiles)
 
     result.value = {
@@ -42,6 +52,9 @@ async function onLocationSubmit({ lat, lon, elevation, yearsBack }) {
       score,
       percentiles: percentiles || {},
       yearsBack,
+      hasHistory: validHistory.length > 0,
+      archiveRequested,
+      archiveSuccess: archiveList.length,
     }
   } catch (e) {
     error.value = e.message || '请求失败，请检查网络或稍后重试'
@@ -62,5 +75,8 @@ async function onLocationSubmit({ lat, lon, elevation, yearsBack }) {
     :score="result.score"
     :percentiles="result.percentiles"
     :years-back="result.yearsBack"
+    :has-history="result.hasHistory"
+    :archive-requested="result.archiveRequested"
+    :archive-success="result.archiveSuccess"
   />
 </template>

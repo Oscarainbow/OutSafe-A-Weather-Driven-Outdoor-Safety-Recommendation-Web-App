@@ -1,11 +1,17 @@
 <script setup>
 import { ref } from 'vue'
+import MapPicker from './MapPicker.vue'
 
 const emit = defineEmits(['submit'])
 const lat = ref(39.9)
 const lon = ref(116.4)
 const elevation = ref('')
 const yearsBack = ref(5)
+
+function onMapSelect({ lat: newLat, lon: newLon }) {
+  lat.value = Math.round(newLat * 1e5) / 1e5
+  lon.value = Math.round(newLon * 1e5) / 1e5
+}
 
 function onSubmit() {
   const payload = {
@@ -21,7 +27,8 @@ function onSubmit() {
 <template>
   <div class="card">
     <h2 style="margin-top: 0;">选择地点</h2>
-    <p class="muted" style="margin-bottom: 1rem;">经纬度 + 可选海拔，时区将自动识别（timezone=auto）</p>
+    <p class="muted" style="margin-bottom: 0.5rem;">点击地图或输入经纬度，时区将自动识别（timezone=auto）</p>
+    <MapPicker :lat="lat" :lon="lon" @select="onMapSelect" />
     <div class="form-row">
       <div class="form-group">
         <label>纬度</label>
