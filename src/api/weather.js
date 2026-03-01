@@ -31,7 +31,8 @@ export async function fetchForecast({ lat, lon, elevation }) {
  * 拉取过去 N 年“同日”的小时数据（同月同日）
  * @param {{ lat: number, lon: number, elevation?: number, date: string, yearsBack?: number }} params
  *   date 格式 YYYY-MM-DD，取当天；yearsBack 默认 5
- * @returns {Promise<ArchiveResponse[]>}
+ * @returns {Promise<{ list: ArchiveResponse[], requested: number }>}
+ *   list: 成功返回的数据；requested: 请求的年数（便于无数据时提示）
  */
 export async function fetchArchiveSameDay({ lat, lon, elevation, date, yearsBack = 5 }) {
   const [y] = date.split('-').map(Number)
@@ -52,5 +53,6 @@ export async function fetchArchiveSameDay({ lat, lon, elevation, date, yearsBack
     requests.push(fetch(url.toString()).then(r => r.ok ? r.json() : null))
   }
   const results = await Promise.all(requests)
-  return results.filter(Boolean)
+  const list = results.filter(Boolean)
+  return { list, requested: yearsBack }
 }
