@@ -1,5 +1,6 @@
 package com.outsafe.backend.controller;
 
+
 import com.outsafe.backend.model.SafetyRecommendRequest;
 import com.outsafe.backend.model.SafetyRecommendResponse;
 import com.outsafe.backend.service.SafetyService;

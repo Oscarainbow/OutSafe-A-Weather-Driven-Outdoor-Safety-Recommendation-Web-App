@@ -1,4 +1,4 @@
-package com.outsafe.service;
+package com.outsafe.backend.service;
 
 import java.time.LocalDate;
 import java.util.HashMap;
