@@ -34,11 +34,17 @@ function badgeClass(level) {
 <template>
   <div class="safety" :class="{ 'safety--overlay': overlay }">
     <div class="safety__scroll">
-      <h2 class="safety__h">AI Conclusion</h2>
+      <h2 class="safety__h">Conclusion</h2>
+      <p class="safety__h-note">Algorithm summary · optional Gemini AI</p>
 
-      <div v-if="!adviceApiConfigured" class="hint hint--muted">
-        AI is not configured yet. The result below is from the local OutSafe algorithm.
-      </div>
+      <!-- No API key: show the same narrative as "comparison" here so this section is never empty -->
+      <template v-if="!adviceApiConfigured">
+        <p class="hint hint--muted">
+          Generative AI is not configured (<code class="code-tag">VITE_GEMINI_API_KEY</code>). The text below is the OutSafe algorithm conclusion.
+        </p>
+        <div v-if="comparisonText" class="ai-body ai-body--algorithm">{{ comparisonText }}</div>
+        <p v-else class="hint hint--muted">No summary text yet.</p>
+      </template>
 
       <div v-else-if="aiAdviceLoading" class="ai-loading">
         <span class="ai-loading__dot" aria-hidden="true" />
@@ -60,19 +66,23 @@ function badgeClass(level) {
 
       <div class="metric-grid" v-if="percentiles">
         <div class="metric-card">
-          <div class="metric-label">Wind Percentile</div>
+          <div class="metric-label">Wind score (0–100)</div>
           <div class="metric-value">{{ percentiles.wind ?? '—' }}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Rain Percentile</div>
+          <div class="metric-label">Rain score (0–100)</div>
           <div class="metric-value">{{ percentiles.rain ?? '—' }}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Cold Percentile</div>
+          <div class="metric-label">Cold score (0–100)</div>
           <div class="metric-value">{{ percentiles.cold ?? '—' }}</div>
         </div>
         <div class="metric-card">
-          <div class="metric-label">Years Compared</div>
+          <div class="metric-label">Heat score (0–100)</div>
+          <div class="metric-value">{{ percentiles.heat ?? '—' }}</div>
+        </div>
+        <div class="metric-card metric-card--wide">
+          <div class="metric-label">Years compared</div>
           <div class="metric-value">{{ yearsBack ?? '—' }}</div>
         </div>
       </div>
@@ -80,13 +90,14 @@ function badgeClass(level) {
       <div v-if="reasons?.length" class="reason-block">
         <h4 class="tiny-title">Key Factors</h4>
         <ul class="reason-list">
-          <li v-for="r in reasons" :key="r.key">
-            {{ r.label }} · Percentile {{ r.pct }}
+          <li v-for="(r, idx) in reasons" :key="r.key + '-' + idx">
+            {{ r.label }} · score {{ r.pct }}
           </li>
         </ul>
       </div>
 
-      <div v-if="comparisonText" class="comparison">
+      <!-- When AI is on, keep comparison below metrics; when AI is off, it's already shown under Conclusion -->
+      <div v-if="comparisonText && adviceApiConfigured" class="comparison">
         {{ comparisonText }}
       </div>
 
@@ -154,9 +165,25 @@ function badgeClass(level) {
 }
 
 .safety__h {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.25rem;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.safety__h-note {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.code-tag {
+  font-size: 0.75em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .safety__sub {
@@ -225,6 +252,10 @@ function badgeClass(level) {
   margin-bottom: 0.35rem;
 }
 
+.ai-body--algorithm {
+  border-color: rgba(88, 166, 255, 0.25);
+}
+
 .risk-line {
   margin: 0 0 0.5rem;
   display: flex;
@@ -243,6 +274,10 @@ function badgeClass(level) {
   grid-template-columns: 1fr 1fr;
   gap: 0.6rem;
   margin-top: 0.6rem;
+}
+
+.metric-card--wide {
+  grid-column: 1 / -1;
 }
 
 .metric-card {
