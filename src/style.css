@@ -14,18 +14,24 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
 }
 
 #app {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 1.5rem;
+  min-height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .card {
@@ -50,13 +56,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
-input {
+input,
+textarea {
   background: var(--bg);
   border: 1px solid #30363d;
   color: var(--text);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   width: 100%;
+  font: inherit;
 }
 
 label {

@@ -2,6 +2,7 @@
 import { levelLabel, topReasons, comparisonText } from '../utils/risk'
 
 const props = defineProps({
+  overlay: { type: Boolean, default: false },
   level: { type: String, default: 'unknown' },
   score: { type: Number, default: 0 },
   percentiles: { type: Object, default: () => ({}) },
@@ -9,6 +10,11 @@ const props = defineProps({
   hasHistory: { type: Boolean, default: true },
   archiveRequested: { type: Number, default: 0 },
   archiveSuccess: { type: Number, default: 0 },
+  historySampleDays: { type: Number, default: 0 },
+  adviceApiConfigured: { type: Boolean, default: false },
+  aiAdvice: { type: String, default: '' },
+  aiAdviceLoading: { type: Boolean, default: false },
+  aiAdviceError: { type: String, default: '' },
 })
 
 const badgeClass = () => {
@@ -19,40 +25,202 @@ const badgeClass = () => {
 
 const reasons = () => topReasons(props.percentiles, 3)
 const comparison = () => comparisonText(props.percentiles, props.yearsBack)
+
+const levelZh = {
+  not_recommended: 'Not Recommended',
+  caution: 'Caution',
+  recommended: 'Recommended',
+  unknown: 'Unknown',
+}
+
+function levelText(lv) {
+  return levelZh[lv] ?? levelLabel(lv)
+}
 </script>
 
 <template>
-  <div class="card">
-    <h2 style="margin-top: 0;">总评</h2>
-    <p>
-      <span :class="['badge', badgeClass()]">{{ levelLabel(level) }}</span>
-      <span class="muted" style="margin-left: 0.5rem;">综合风险 {{ score }}%</span>
-    </p>
-    <div v-if="!hasHistory" class="no-history-tip">
-      <p>暂无历史同日数据，百分位为参考值（50% 表示无法与历史对比）。</p>
-      <p class="no-history-reasons">可能原因：请求了 {{ archiveRequested }} 年同日数据，成功 {{ archiveSuccess }} 条。若为 0，多为网络问题、Open-Meteo 限流，或该区域/日期暂无历史存档。</p>
-    </div>
+  <div class="safety" :class="{ 'safety--overlay': overlay }">
+    <div class="safety__scroll">
+      <h2 class="safety__h">AI Conclusion</h2>
+      <div v-if="!adviceApiConfigured" class="hint hint--muted">
+        AI is not requested when <code>VITE_GEMINI_API_KEY</code> is not configured. The risk reference below is from the local algorithm.
+      </div>
+      <div v-else-if="aiAdviceLoading" class="ai-loading">
+        <span class="ai-loading__dot" aria-hidden="true" />
+        Generating advice...
+      </div>
+      <p v-else-if="aiAdviceError" class="hint hint--err">{{ aiAdviceError }}</p>
+      <div v-else-if="aiAdvice" class="ai-body">{{ aiAdvice }}</div>
+      <p v-else class="hint hint--muted">No AI response yet. Please wait or check the backend.</p>
 
-    <div v-if="reasons().length" class="reason-block">
-      <h3 class="sub">关键原因</h3>
-      <ul class="reason-list">
-        <li v-for="r in reasons()" :key="r.key">
-          {{ r.label }}：历史百分位 {{ r.pct }}%
-        </li>
-      </ul>
-    </div>
+      <h3 class="safety__sub">Local Risk</h3>
+      <p class="risk-line">
+        <span :class="['badge', badgeClass()]">{{ levelText(level) }}</span>
+        <span class="risk-score">Composite Index {{ score }}%</span>
+      </p>
 
-    <div class="comparison">
-      {{ comparison() }}
+      <div v-if="!hasHistory" class="hint hint--warn">
+        Insufficient historical samples, percentiles are for reference only. Requested {{ archiveRequested }} / Success {{ archiveSuccess }} / Valid Days {{ historySampleDays }}.
+      </div>
+
+      <div v-if="reasons().length" class="reason-block">
+        <h4 class="tiny-title">Key Factors</h4>
+        <ul class="reason-list">
+          <li v-for="r in reasons()" :key="r.key">
+            {{ r.label }} · Percentile {{ r.pct }}%
+          </li>
+        </ul>
+      </div>
+
+      <div class="comparison">{{ comparison() }}</div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.muted { color: var(--muted); font-size: 0.9rem; }
-.sub { font-size: 1rem; margin: 0.75rem 0 0.25rem; color: var(--muted); }
-.reason-block { margin-top: 0.5rem; }
-.no-history-tip { font-size: 0.85rem; color: var(--warning); margin-top: 0.5rem; }
-.no-history-tip p { margin: 0.25rem 0; }
-.no-history-reasons { color: var(--muted); font-size: 0.8rem; }
+.safety--overlay {
+  background: rgba(22, 29, 39, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.safety__scroll {
+  padding: 1rem 1.1rem 1.1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 0;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.safety__scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.safety__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.safety__scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+
+.safety__scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.safety__h {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.safety__sub {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tiny-title {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin: 0 0 0.5rem;
+}
+
+.hint--muted {
+  color: var(--muted);
+}
+
+.hint--err {
+  color: #ff9d97;
+  margin: 0 0 0.5rem;
+}
+
+.hint--warn {
+  color: var(--warning);
+  margin: 0.5rem 0;
+  font-size: 0.78rem;
+}
+
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.ai-loading__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+
+.ai-body {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 0.875rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 0.35rem;
+}
+
+.risk-line {
+  margin: 0 0 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.risk-score {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.reason-block {
+  margin-top: 0.35rem;
+}
+
+.comparison {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
 </style>
