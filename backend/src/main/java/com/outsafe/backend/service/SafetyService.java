@@ -1,87 +1,85 @@
 package com.outsafe.backend.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.outsafe.backend.model.SafetyRecommendRequest;
 import com.outsafe.backend.model.SafetyRecommendResponse;
+import com.outsafe.backend.service.OpenMeteoService.ForecastDailyData;
 
-/**
- * Service layer responsible for computing safety recommendations.
- * Core idea:
- * 1) For each risk factor, compute percentile vs. historical distribution.
- * 2) Convert percentiles into a weighted risk score (0-100).
- * 3) safetyScore = 100 - riskScore
- * 4) Map safetyScore to level: recommended / caution / not_recommended
- * 5) Provide top contributing factors as reasons.
- */
 @Service
 public class SafetyService {
 
-    // Tunable weights (sum to 1.0)
+    private final OpenMeteoService openMeteoService;
+
+    public SafetyService(OpenMeteoService openMeteoService) {
+        this.openMeteoService = openMeteoService;
+    }
+
     private static final Map<String, Double> WEIGHTS = Map.of(
             "wind", 0.40,
             "rain", 0.30,
             "cold", 0.30
     );
 
-    // Score thresholds (simple + stable)
     private static final double RECOMMENDED_MIN = 70.0;
     private static final double CAUTION_MIN = 40.0;
 
     public SafetyRecommendResponse recommend(SafetyRecommendRequest request) {
 
-        // Defaults
+        if (request.latitude() == null || request.longitude() == null) {
+            throw new IllegalArgumentException("latitude and longitude are required");
+        }
+
         LocalDate date = (request.date() == null) ? LocalDate.now() : request.date();
         int yearsBack = (request.years_back() == null || request.years_back() <= 0) ? 5 : request.years_back();
         String timezone = (request.timezone() == null || request.timezone().isBlank()) ? "auto" : request.timezone();
 
-        // ------------------------------------------------------------
-        // TODO (later): Replace the following "observed" and "historical" mock data
-        // with:
-        //  - Open-Meteo API fetch (current/forecast/historical)
-        //  - or DB/Timescale query
-        // ------------------------------------------------------------
+        double lat = request.latitude();
+        double lon = request.longitude();
 
-        // Mock observed values for the selected date (units are just placeholders)
-        // You can later compute these from Open-Meteo daily/hourly fields.
-        Map<String, Double> observed = Map.of(
-                "wind", 12.5,   // e.g., wind speed (m/s)
-                "rain",  6.0,   // e.g., precipitation (mm)
-                "cold", -3.0    // e.g., temperature (°C) where "lower = colder"
-        );
+        // 1) observed: selected day's weather
+        ForecastDailyData observedDaily = openMeteoService.getForecastDaily(lat, lon, date, timezone);
 
-        // Mock historical distributions for the same calendar day over past yearsBack years
-        // Later, these lists should be built from real historical series.
-        Map<String, List<Double>> historical = Map.of(
-                "wind", List.of(3.2, 4.1, 5.0, 6.8, 7.3, 8.0, 9.5, 10.2, 11.0, 12.0, 13.7),
-                "rain", List.of(0.0, 0.0, 0.3, 0.8, 1.2, 2.0, 3.1, 4.5, 5.2, 7.0, 9.4),
-                // Note: for "cold", more negative means colder => higher risk.
-                // We want percentile to represent "how cold (risky) it is".
-                // So we compute percentile on (-temperature) instead of temperature.
-                "cold", List.of(-10.0, -8.0, -6.0, -5.0, -3.0, -2.0, 0.0, 1.0, 2.0, 3.0)
-        );
+        Map<String, Double> observed = new HashMap<>();
+        observed.put("wind", nullSafe(observedDaily.windSpeedMax()));
+        observed.put("rain", nullSafe(observedDaily.precipitationSum()));
+        observed.put("cold", nullSafe(observedDaily.temperatureMin()));
 
-        // Convert observed values into "risk-direction" comparable values.
-        // wind: higher wind => higher risk (use as-is)
-        // rain: higher rain => higher risk (use as-is)
-        // cold: colder => higher risk, so use (-temperature) as "coldness"
+        // 2) historical: same date in past N years
+        Map<String, List<Double>> historical = new HashMap<>();
+        historical.put("wind", new ArrayList<>());
+        historical.put("rain", new ArrayList<>());
+        historical.put("cold", new ArrayList<>());
+
+        for (int i = 1; i <= yearsBack; i++) {
+            LocalDate pastDate = date.minusYears(i);
+            try {
+                ForecastDailyData hist = openMeteoService.getHistoricalDaily(lat, lon, pastDate, timezone);
+
+                historical.get("wind").add(nullSafe(hist.windSpeedMax()));
+                historical.get("rain").add(nullSafe(hist.precipitationSum()));
+                historical.get("cold").add(nullSafe(hist.temperatureMin()));
+            } catch (Exception e) {
+                // skip bad historical year
+            }
+        }
+
         Map<String, Double> observedRiskValue = new HashMap<>();
         observedRiskValue.put("wind", observed.get("wind"));
         observedRiskValue.put("rain", observed.get("rain"));
-        observedRiskValue.put("cold", -observed.get("cold")); // e.g., -(-3) = 3 coldness
+        observedRiskValue.put("cold", -observed.get("cold"));
 
         Map<String, List<Double>> historicalRiskValue = new HashMap<>();
         historicalRiskValue.put("wind", historical.get("wind"));
         historicalRiskValue.put("rain", historical.get("rain"));
-        historicalRiskValue.put("cold", historical.get("cold").stream().map(v -> -v).collect(Collectors.toList()));
+        historicalRiskValue.put("cold", historical.get("cold").stream().map(v -> -v).toList());
 
-        // 1) Compute percentiles (0–100)
         Map<String, Integer> percentiles = new HashMap<>();
         for (String key : WEIGHTS.keySet()) {
             double v = observedRiskValue.get(key);
@@ -90,27 +88,20 @@ public class SafetyService {
             percentiles.put(key, pct);
         }
 
-        // 2) Compute weighted risk score (0–100), then safety score (0–100)
         double riskScore = 0.0;
         for (String key : WEIGHTS.keySet()) {
             riskScore += percentiles.get(key) * WEIGHTS.get(key);
         }
+
         double safetyScore = clamp(100.0 - riskScore, 0.0, 100.0);
-
-        // 3) Level by safety score
         String level = levelFromScore(safetyScore);
-
-        // 4) Reasons: top 2 highest percentiles (most unusual / most risky)
         List<SafetyRecommendResponse.ReasonItem> reasons = topReasons(percentiles, 2);
-
-        // 5) Human-readable summary
         String comparisonText = buildComparisonText(date, yearsBack, percentiles, reasons);
 
-        // 6) Meta for transparency/debug
         Map<String, Object> meta = new HashMap<>();
         meta.put("date", date.toString());
         meta.put("timezone", timezone);
-        meta.put("data_source", "mock");
+        meta.put("data_source", "open-meteo");
         meta.put("weights", WEIGHTS);
         meta.put("risk_score", round2(riskScore));
         meta.put("observed_raw", observed);
@@ -126,12 +117,12 @@ public class SafetyService {
         );
     }
 
-    /**
-     * Percentile rank: percentage of historical values <= value.
-     * Returns int in [0, 100].
-     */
+    private double nullSafe(Double value) {
+        return value == null ? 0.0 : value;
+    }
+
     private int percentile(double value, List<Double> historical) {
-        if (historical == null || historical.isEmpty()) return 50; // neutral fallback
+        if (historical == null || historical.isEmpty()) return 50;
         long count = historical.stream().filter(v -> v <= value).count();
         double pct = (count * 100.0) / historical.size();
         return (int) Math.round(clamp(pct, 0.0, 100.0));
