@@ -50,12 +50,14 @@ public class SafetyService {
         observed.put("wind", nullSafe(observedDaily.windSpeedMax()));
         observed.put("rain", nullSafe(observedDaily.precipitationSum()));
         observed.put("cold", nullSafe(observedDaily.temperatureMin()));
+        observed.put("high", nullSafe(observedDaily.temperatureMax()));
 
         // 2) historical: same date in past N years
         Map<String, List<Double>> historical = new HashMap<>();
         historical.put("wind", new ArrayList<>());
         historical.put("rain", new ArrayList<>());
         historical.put("cold", new ArrayList<>());
+        historical.put("high", new ArrayList<>());
 
         for (int i = 1; i <= yearsBack; i++) {
             LocalDate pastDate = date.minusYears(i);
@@ -65,6 +67,7 @@ public class SafetyService {
                 historical.get("wind").add(nullSafe(hist.windSpeedMax()));
                 historical.get("rain").add(nullSafe(hist.precipitationSum()));
                 historical.get("cold").add(nullSafe(hist.temperatureMin()));
+                historical.get("high").add(nullSafe(hist.temperatureMax()));
             } catch (Exception e) {
                 // skip bad historical year
             }
@@ -106,6 +109,13 @@ public class SafetyService {
         meta.put("risk_score", round2(riskScore));
         meta.put("observed_raw", observed);
 
+        List<SafetyRecommendResponse.DiagramMetric> diagramMetrics = List.of(
+            buildMetric("Max gust", "km/h", observed.get("wind"), historical.get("wind")),
+            buildMetric("Daily precip", "mm", observed.get("rain"), historical.get("rain")),
+            buildMetric("Min apparent", "°C", observed.get("cold"), historical.get("cold")),
+            buildMetric("Daily high", "°C", observed.get("high"), historical.get("high"))
+        );
+
         return new SafetyRecommendResponse(
                 level,
                 round2(safetyScore),
@@ -113,7 +123,8 @@ public class SafetyService {
                 yearsBack,
                 reasons,
                 comparisonText,
-                meta
+                meta,
+                diagramMetrics
         );
     }
 
@@ -173,5 +184,40 @@ public class SafetyService {
 
     private double round2(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    private SafetyRecommendResponse.DiagramMetric buildMetric(String label, String unit, Double current, List<Double> history) {
+        List<Double> all = new ArrayList<>(history);
+        if (current != null) all.add(current);
+        if (all.isEmpty()) {
+            return new SafetyRecommendResponse.DiagramMetric(label, current != null ? current : 0.0, unit, 0, 0, 0, 0, 0);
+        }
+        all.sort(Double::compareTo);
+        double min = all.get(0);
+        double max = all.get(all.size() - 1);
+        double q25 = percentileValue(all, 25);
+        double median = percentileValue(all, 50);
+        double q75 = percentileValue(all, 75);
+        return new SafetyRecommendResponse.DiagramMetric(
+                label,
+                current != null ? round1(current) : 0.0,
+                unit,
+                round1(min), round1(max), round1(q25), round1(q75), round1(median)
+        );
+    }
+
+    private double percentileValue(List<Double> sorted, double pct) {
+        if (sorted.isEmpty()) return 0.0;
+        if (sorted.size() == 1) return sorted.get(0);
+        double index = (pct / 100.0) * (sorted.size() - 1);
+        int lower = (int) Math.floor(index);
+        int upper = (int) Math.ceil(index);
+        if (lower == upper) return sorted.get(lower);
+        double weight = index - lower;
+        return sorted.get(lower) * (1 - weight) + sorted.get(upper) * weight;
+    }
+
+    private double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
     }
 }

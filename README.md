@@ -1,25 +1,38 @@
-# OutSafe - 户外安全建议（纯前端）
+# OutSafe - 户外安全建议（前后端分离架构）
 
-基于 Vue 3 + Vite，无需后端即可运行。使用 Open-Meteo 的 Forecast / Archive API（无需 API Key）。
+基于 Vue 3 + Vite 的前端，以及 Spring Boot 的后端。使用 Open-Meteo 的 Forecast / Archive API 和 Gemini AI 提供风险分析和安全建议。
 
 ## 流程概览
 
 1. **选地点**：经纬度 + 可选海拔，时区 `timezone=auto`
-2. **Forecast API**：拉取今天/未来小时数据
-3. **Archive API**：拉取过去 N 年「同日」小时数据
-4. **窗口聚合**：对「今天」和每个历史年做单日指标聚合
-5. **计算**：各指标历史百分位、综合风险分
-6. **UI**：总评（不建议/谨慎/推荐）、关键原因 Top 2~3、「与过去 N 年相比」文案
+2. **后端代理**：前端发送请求至本地的 Spring Boot 后端 `/api/safety/recommend`。
+3. **后端计算**：后端获取当天的 Forecast 数据，以及过去 N 年的 Archive 数据，计算窗口聚合、历史百分位和综合风险分。
+4. **前端展示与 AI 建议**：前端收到计算结果后渲染风险滑块图，并将结果和用户的活动提示发送至 Gemini 模型获取智能安全建议。
 
-## 本地运行
+## 本地运行 (需要同时启动前端和后端)
 
+**1. 配置环境**
+- 确保已安装 **Node.js** 和 **Java 17+** (且配置了 `JAVA_HOME`)。
+- 在项目根目录创建一个 `.env` 文件，并配置你的 Gemini API 密钥：
+  ```
+  VITE_GEMINI_API_KEY=你的API密钥
+  ```
+
+**2. 启动后端 (Spring Boot)**
+打开一个新的终端并运行：
 ```bash
-cd OutSafe-A-Weather-Driven-Outdoor-Safety-Recommendation-Web-App
+npm run dev:backend
+# 或者进入 backend 目录手动运行: cd backend && mvnw spring-boot:run
+```
+后端将在 `http://localhost:8080` 启动。
+
+**3. 启动前端 (Vue/Vite)**
+打开另一个新的终端并运行：
+```bash
 npm install
 npm run dev
 ```
-
-浏览器打开终端里提示的地址（通常是 http://localhost:5173）。
+浏览器打开终端里提示的地址（通常是 `http://localhost:5173`）。前端的请求会自动代理到 `8080` 端口。
 
 ## 项目结构
 

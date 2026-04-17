@@ -4,6 +4,7 @@ import MapPicker from './components/MapPicker.vue'
 import LocationPicker from './components/LocationPicker.vue'
 import SafetyResult from './components/SafetyResult.vue'
 import { fetchSafetyRecommendation } from './utils/api'
+import { fetchAiAdvice } from './api/ai'
 
 const lat = ref(41.4993)
 const lon = ref(-81.6944)
@@ -22,7 +23,7 @@ function onMapSelect({ lat: la, lon: lo }) {
 }
 
 function isAdviceApiConfigured() {
-  return false
+  return !!import.meta.env.VITE_GEMINI_API_KEY
 }
 
 async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack, activityPrompt }) {
@@ -48,12 +49,13 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
     result.value = data
 
     // 以后这里接第二个 AI API
-    // 现在先占位，不影响本地算法结果展示
-    if (activityPrompt && isAdviceApiConfigured()) {
+    if (isAdviceApiConfigured()) {
       aiAdviceLoading.value = true
       try {
-        // TODO: call external AI API here
-        aiAdvice.value = ''
+        aiAdvice.value = await fetchAiAdvice({
+          userPrompt: activityPrompt,
+          resultData: data
+        })
       } catch (e) {
         aiAdviceError.value = e.message || 'AI advice request failed.'
       } finally {
@@ -99,6 +101,7 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
         :reasons="result.reasons"
         :comparison-text="result.comparison_text"
         :meta="result.meta"
+        :diagram-metrics="result.diagram_metrics"
         :advice-api-configured="isAdviceApiConfigured()"
         :ai-advice="aiAdvice"
         :ai-advice-loading="aiAdviceLoading"

@@ -21,7 +21,7 @@ public class OpenMeteoService {
                 .fromUriString("https://api.open-meteo.com/v1/forecast")
                 .queryParam("latitude", latitude)
                 .queryParam("longitude", longitude)
-                .queryParam("daily", "temperature_2m_min,precipitation_sum,wind_speed_10m_max")
+                .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max")
                 .queryParam("timezone", timezone == null || timezone.isBlank() ? "auto" : timezone)
                 .queryParam("start_date", date)
                 .queryParam("end_date", date)
@@ -32,6 +32,7 @@ public class OpenMeteoService {
         validateDailyResponse(response, "forecast");
 
         return new ForecastDailyData(
+                firstOrNull(response.daily().temperature_2m_max()),
                 firstOrNull(response.daily().temperature_2m_min()),
                 firstOrNull(response.daily().precipitation_sum()),
                 firstOrNull(response.daily().wind_speed_10m_max())
@@ -43,7 +44,7 @@ public class OpenMeteoService {
                 .fromUriString("https://archive-api.open-meteo.com/v1/archive")
                 .queryParam("latitude", latitude)
                 .queryParam("longitude", longitude)
-                .queryParam("daily", "temperature_2m_min,precipitation_sum,wind_speed_10m_max")
+                .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max")
                 .queryParam("timezone", timezone == null || timezone.isBlank() ? "auto" : timezone)
                 .queryParam("start_date", date)
                 .queryParam("end_date", date)
@@ -54,6 +55,7 @@ public class OpenMeteoService {
         validateDailyResponse(response, "historical");
 
         return new ForecastDailyData(
+                firstOrNull(response.daily().temperature_2m_max()),
                 firstOrNull(response.daily().temperature_2m_min()),
                 firstOrNull(response.daily().precipitation_sum()),
                 firstOrNull(response.daily().wind_speed_10m_max())
@@ -72,6 +74,7 @@ public class OpenMeteoService {
     }
 
     public record ForecastDailyData(
+            Double temperatureMax,
             Double temperatureMin,
             Double precipitationSum,
             Double windSpeedMax
@@ -83,6 +86,7 @@ public class OpenMeteoService {
 
     public record Daily(
             List<String> time,
+            List<Double> temperature_2m_max,
             List<Double> temperature_2m_min,
             List<Double> precipitation_sum,
             List<Double> wind_speed_10m_max

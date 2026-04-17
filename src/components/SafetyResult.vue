@@ -1,4 +1,6 @@
 <script setup>
+import RiskDiagram from './RiskDiagram.vue'
+
 const props = defineProps({
   overlay: { type: Boolean, default: false },
   level: { type: String, default: 'unknown' },
@@ -8,6 +10,7 @@ const props = defineProps({
   reasons: { type: Array, default: () => [] },
   comparisonText: { type: String, default: '' },
   meta: { type: Object, default: () => ({}) },
+  diagramMetrics: { type: Array, default: () => [] },
   adviceApiConfigured: { type: Boolean, default: false },
   aiAdvice: { type: String, default: '' },
   aiAdviceLoading: { type: Boolean, default: false },
@@ -101,6 +104,8 @@ function badgeClass(level) {
         <div><strong>Timezone:</strong> {{ meta.timezone ?? '—' }}</div>
         <div><strong>Date:</strong> {{ meta.date ?? '—' }}</div>
       </div>
+
+      <RiskDiagram :metrics="diagramMetrics" />
     </div>
   </div>
 </template>
