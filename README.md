@@ -1,58 +1,70 @@
-# OutSafe - 户外安全建议（前后端分离架构）
+# OutSafe - Weather-Driven Outdoor Safety Recommendation
 
-基于 Vue 3 + Vite 的前端，以及 Spring Boot 的后端。使用 Open-Meteo 的 Forecast / Archive API 和 Gemini AI 提供风险分析和安全建议。
+OutSafe is a full-stack web application designed to provide users with weather-driven safety recommendations for outdoor activities. 
+It features a **Vue 3 + Vite** frontend and a **Java Spring Boot** backend, leveraging the **Open-Meteo API** for real-time and historical weather data, and the **Gemini 2.5 Flash AI** to generate human-friendly, concise safety advice.
 
-## 流程概览
+## System Architecture & Workflow
 
-1. **选地点**：经纬度 + 可选海拔，时区 `timezone=auto`
-2. **后端代理**：前端发送请求至本地的 Spring Boot 后端 `/api/safety/recommend`。
-3. **后端计算**：后端获取当天的 Forecast 数据，以及过去 N 年的 Archive 数据，计算窗口聚合、历史百分位和综合风险分。
-4. **前端展示与 AI 建议**：前端收到计算结果后渲染风险滑块图，并将结果和用户的活动提示发送至 Gemini 模型获取智能安全建议。
+1. **Location Selection**: The user selects a location (latitude, longitude) and optionally elevation. The timezone is automatically detected (`timezone=auto`).
+2. **Backend Proxy**: The frontend sends the request parameters to the local Spring Boot backend via the `/api/safety/recommend` endpoint.
+3. **Backend Processing**: 
+   - The backend fetches the forecast data for the selected day and the historical archive data for the same day over the past `N` years using the Open-Meteo API.
+   - It performs window aggregations, calculates historical percentiles, and computes a composite risk score (e.g., max wind gusts, daily precipitation, minimum apparent temperature).
+   - It also generates detailed quartile metrics (min, max, median, IQR) for visual comparison.
+4. **Frontend Visualization & AI Advice**: 
+   - The frontend receives the computed results and renders an intuitive "TODAY VS PAST" risk diagram.
+   - The raw weather data, historical comparisons, and user's planned activity are sent to the Gemini AI model.
+   - Gemini returns a personalized, easy-to-understand safety recommendation in Markdown format.
 
-## 本地运行 (需要同时启动前端和后端)
+## Prerequisites
 
-**1. 配置环境**
-- 确保已安装 **Node.js** 和 **Java 17+** (且配置了 `JAVA_HOME`)。
-- 在项目根目录创建一个 `.env` 文件，并配置你的 Gemini API 密钥：
-  ```
-  VITE_GEMINI_API_KEY=你的API密钥
-  ```
+Ensure you have the following installed on your system:
+- **Node.js** (for running the Vue frontend)
+- **Java 17 or higher** (for running the Spring Boot backend)
+- Ensure the `JAVA_HOME` environment variable is correctly configured on your machine.
 
-**2. 启动后端 (Spring Boot)**
-打开一个新的终端并运行：
+## Local Development (Running the App)
+
+To run the application, you need to start **both** the backend and frontend servers simultaneously in separate terminal windows.
+
+### 1. Environment Setup
+Create a `.env` file in the root directory of the project and configure your Google Gemini API key:
+```env
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 2. Start the Backend (Spring Boot)
+Open a new terminal in the project root and run:
 ```bash
 npm run dev:backend
-# 或者进入 backend 目录手动运行: cd backend && mvnw spring-boot:run
 ```
-后端将在 `http://localhost:8080` 启动。
+*(Alternatively, navigate to the `backend` directory and run: `mvnw spring-boot:run`)*
 
-**3. 启动前端 (Vue/Vite)**
-打开另一个新的终端并运行：
+The backend server will start on `http://localhost:8081`.
+
+### 3. Start the Frontend (Vue/Vite)
+Open a second terminal in the project root, install the dependencies, and start the Vite dev server:
 ```bash
 npm install
 npm run dev
 ```
-浏览器打开终端里提示的地址（通常是 `http://localhost:5173`）。前端的请求会自动代理到 `8080` 端口。
+Open your browser and navigate to the URL shown in the terminal (usually `http://localhost:5173`). All frontend requests to `/api` are automatically proxied to the backend running on port 8081.
 
-## 项目结构
+## Project Structure
 
-```
-src/
-  main.js           # 入口
-  App.vue           # 主页面：地点选择 + 结果展示
-  style.css         # 全局样式
-  api/
-    weather.js      # Forecast / Archive 请求（Open-Meteo）
-  utils/
-    risk.js         # 聚合、百分位、综合风险、文案
-  components/
-    LocationPicker.vue   # 经纬度、海拔、历史年数
-    SafetyResult.vue     # 总评、关键原因、与历史对比
-```
-
-## 构建
-
-```bash
-npm run build
-npm run preview   # 预览构建结果
+```text
+OutSafe/
+├── backend/                   # Spring Boot Java Backend
+│   ├── src/main/java/...      # Controllers, Services, and Models
+│   ├── pom.xml                # Maven dependencies
+│   └── mvnw                   # Maven wrapper
+├── src/                       # Vue 3 Frontend
+│   ├── api/                   # API integration (AI fetch logic)
+│   ├── components/            # Vue components (LocationPicker, RiskDiagram, SafetyResult)
+│   ├── utils/                 # Utility functions
+│   ├── App.vue                # Main application view
+│   └── main.js                # Frontend entry point
+├── .env                       # Environment variables (e.g., API keys)
+├── package.json               # NPM scripts and dependencies
+└── vite.config.js             # Vite configuration and proxy settings
 ```
