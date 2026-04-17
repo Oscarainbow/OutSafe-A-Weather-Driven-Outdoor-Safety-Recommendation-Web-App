@@ -99,8 +99,8 @@ export function compositeRisk(percentiles, weights = { wind: 0.35, rain: 0.35, c
 
 /** 总评文案 */
 export function levelLabel(level) {
-  const map = { not_recommended: '不建议', caution: '谨慎', recommended: '推荐', unknown: '未知' }
-  return map[level] ?? '未知'
+  const map = { not_recommended: 'Not Recommended', caution: 'Caution', recommended: 'Recommended', unknown: 'Unknown' }
+  return map[level] ?? 'Unknown'
 }
 
 /**
@@ -109,9 +109,9 @@ export function levelLabel(level) {
 export function topReasons(percentiles, limit = 3) {
   if (!percentiles) return []
   const items = [
-    { key: 'wind', label: '风', pct: percentiles.wind },
-    { key: 'rain', label: '降水', pct: percentiles.rain },
-    { key: 'cold', label: '体感寒冷', pct: percentiles.cold },
+    { key: 'wind', label: 'Wind', pct: percentiles.wind },
+    { key: 'rain', label: 'Precipitation', pct: percentiles.rain },
+    { key: 'cold', label: 'Cold (Apparent)', pct: percentiles.cold },
   ].filter(i => i.pct != null)
   items.sort((a, b) => b.pct - a.pct)
   return items.slice(0, limit)
@@ -123,12 +123,12 @@ export function topReasons(percentiles, limit = 3) {
 export function comparisonText(percentiles, n) {
   if (!percentiles) return ''
   const parts = []
-  if (percentiles.wind >= 70) parts.push(`风更极端（${percentiles.wind}%）`)
-  if (percentiles.rain >= 70) parts.push(`降水偏多（${percentiles.rain}%）`)
-  if (percentiles.cold >= 70) parts.push(`体感更冷（${percentiles.cold}%）`)
-  if (percentiles.wind <= 30) parts.push(`风较温和（${percentiles.wind}%）`)
-  if (percentiles.rain <= 30) parts.push(`降水较少（${percentiles.rain}%）`)
-  if (percentiles.cold <= 30) parts.push(`体感较暖（${percentiles.cold}%）`)
-  if (parts.length === 0) return `与过去 ${n} 年同日相比，整体接近历史水平。`
-  return `与过去 ${n} 年同日相比：${parts.join('，')}。`
+  if (percentiles.wind >= 70) parts.push(`stronger wind (${percentiles.wind}%)`)
+  if (percentiles.rain >= 70) parts.push(`more precipitation (${percentiles.rain}%)`)
+  if (percentiles.cold >= 70) parts.push(`colder apparent temp (${percentiles.cold}%)`)
+  if (percentiles.wind <= 30) parts.push(`milder wind (${percentiles.wind}%)`)
+  if (percentiles.rain <= 30) parts.push(`less precipitation (${percentiles.rain}%)`)
+  if (percentiles.cold <= 30) parts.push(`warmer apparent temp (${percentiles.cold}%)`)
+  if (parts.length === 0) return `Compared to the same day over the past ${n} years, conditions are around the historical average.`
+  return `Compared to the same day over the past ${n} years: ${parts.join(', ')}.`
 }
