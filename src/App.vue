@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import MapPicker from './components/MapPicker.vue'
 import LocationPicker from './components/LocationPicker.vue'
 import SafetyResult from './components/SafetyResult.vue'
+import { fetchSafetyRecommendation } from './utils/api'
 
 const lat = ref(41.4993)
 const lon = ref(-81.6944)
@@ -10,10 +11,10 @@ const lon = ref(-81.6944)
 const loading = ref(false)
 const error = ref('')
 const result = ref(null)
+
 const aiAdvice = ref('')
 const aiAdviceLoading = ref(false)
 const aiAdviceError = ref('')
-const rawMeteoData = ref(null)
 
 function onMapSelect({ lat: la, lon: lo }) {
   lat.value = Math.round(la * 1e5) / 1e5
@@ -31,28 +32,37 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
   aiAdvice.value = ''
   aiAdviceError.value = ''
   aiAdviceLoading.value = false
-  rawMeteoData.value = null
 
   lat.value = subLat
   lon.value = subLon
 
   try {
-    // Mock the UI state since API logic is removed for future integration
-    setTimeout(() => {
-      result.value = {
-        level: 'caution',
-        score: 65,
-        percentiles: { wind: 80, rain: 20, cold: 60 },
-        yearsBack,
-        hasHistory: true,
-        archiveRequested: yearsBack,
-        archiveSuccess: yearsBack,
-        historySampleDays: yearsBack * 30,
+    const data = await fetchSafetyRecommendation({
+      lat: subLat,
+      lon: subLon,
+      elevation,
+      yearsBack,
+      timezone: 'America/New_York',
+    })
+
+    result.value = data
+
+    // 以后这里接第二个 AI API
+    // 现在先占位，不影响本地算法结果展示
+    if (activityPrompt && isAdviceApiConfigured()) {
+      aiAdviceLoading.value = true
+      try {
+        // TODO: call external AI API here
+        aiAdvice.value = ''
+      } catch (e) {
+        aiAdviceError.value = e.message || 'AI advice request failed.'
+      } finally {
+        aiAdviceLoading.value = false
       }
-      loading.value = false
-    }, 800)
+    }
   } catch (e) {
-    error.value = e.message || '请求失败，请检查网络或稍后重试'
+    error.value = e.message || 'Request failed. Please check backend connection.'
+  } finally {
     loading.value = false
   }
 }
@@ -80,16 +90,15 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
       </div>
 
       <SafetyResult
-        v-if="result"
+        v-else-if="result"
         overlay
         :level="result.level"
         :score="result.score"
         :percentiles="result.percentiles"
-        :years-back="result.yearsBack"
-        :has-history="result.hasHistory"
-        :archive-requested="result.archiveRequested"
-        :archive-success="result.archiveSuccess"
-        :history-sample-days="result.historySampleDays"
+        :years-back="result.years_back"
+        :reasons="result.reasons"
+        :comparison-text="result.comparison_text"
+        :meta="result.meta"
         :advice-api-configured="isAdviceApiConfigured()"
         :ai-advice="aiAdvice"
         :ai-advice-loading="aiAdviceLoading"

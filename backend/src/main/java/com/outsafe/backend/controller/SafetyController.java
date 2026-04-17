@@ -1,6 +1,5 @@
 package com.outsafe.backend.controller;
 
-
 import com.outsafe.backend.model.SafetyRecommendRequest;
 import com.outsafe.backend.model.SafetyRecommendResponse;
 import com.outsafe.backend.service.SafetyService;
@@ -38,5 +37,13 @@ public class SafetyController {
     ) {
         SafetyRecommendRequest req = new SafetyRecommendRequest(lat, lon, elevation, date, yearsBack, timezone);
         return safetyService.recommend(req);
+    }
+
+    /**
+     * POST endpoint for frontend / future extension.
+     */
+    @PostMapping("/recommend")
+    public SafetyRecommendResponse recommendPost(@RequestBody SafetyRecommendRequest request) {
+        return safetyService.recommend(request);
     }
 }

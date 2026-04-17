@@ -1,40 +1,30 @@
 <script setup>
-import { levelLabel, topReasons, comparisonText } from '../utils/risk'
-
 const props = defineProps({
   overlay: { type: Boolean, default: false },
   level: { type: String, default: 'unknown' },
   score: { type: Number, default: 0 },
   percentiles: { type: Object, default: () => ({}) },
   yearsBack: { type: Number, default: 5 },
-  hasHistory: { type: Boolean, default: true },
-  archiveRequested: { type: Number, default: 0 },
-  archiveSuccess: { type: Number, default: 0 },
-  historySampleDays: { type: Number, default: 0 },
+  reasons: { type: Array, default: () => [] },
+  comparisonText: { type: String, default: '' },
+  meta: { type: Object, default: () => ({}) },
   adviceApiConfigured: { type: Boolean, default: false },
   aiAdvice: { type: String, default: '' },
   aiAdviceLoading: { type: Boolean, default: false },
   aiAdviceError: { type: String, default: '' },
 })
 
-const badgeClass = () => {
-  if (props.level === 'not_recommended') return 'badge--danger'
-  if (props.level === 'caution') return 'badge--warning'
-  return 'badge--success'
-}
-
-const reasons = () => topReasons(props.percentiles, 3)
-const comparison = () => comparisonText(props.percentiles, props.yearsBack)
-
-const levelZh = {
-  not_recommended: 'Not Recommended',
-  caution: 'Caution',
+const levelDisplay = {
   recommended: 'Recommended',
+  caution: 'Caution',
+  not_recommended: 'Not Recommended',
   unknown: 'Unknown',
 }
 
-function levelText(lv) {
-  return levelZh[lv] ?? levelLabel(lv)
+function badgeClass(level) {
+  if (level === 'not_recommended') return 'badge--danger'
+  if (level === 'caution') return 'badge--warning'
+  return 'badge--success'
 }
 </script>
 
@@ -42,37 +32,75 @@ function levelText(lv) {
   <div class="safety" :class="{ 'safety--overlay': overlay }">
     <div class="safety__scroll">
       <h2 class="safety__h">AI Conclusion</h2>
+
       <div v-if="!adviceApiConfigured" class="hint hint--muted">
-        AI is not requested when <code>VITE_GEMINI_API_KEY</code> is not configured. The risk reference below is from the local algorithm.
+        AI is not configured yet. The result below is from the local OutSafe algorithm.
       </div>
+
       <div v-else-if="aiAdviceLoading" class="ai-loading">
         <span class="ai-loading__dot" aria-hidden="true" />
         Generating advice...
       </div>
-      <p v-else-if="aiAdviceError" class="hint hint--err">{{ aiAdviceError }}</p>
-      <div v-else-if="aiAdvice" class="ai-body">{{ aiAdvice }}</div>
-      <p v-else class="hint hint--muted">No AI response yet. Please wait or check the backend.</p>
 
-      <h3 class="safety__sub">Local Risk</h3>
+      <p v-else-if="aiAdviceError" class="hint hint--err">{{ aiAdviceError }}</p>
+
+      <div v-else-if="aiAdvice" class="ai-body">{{ aiAdvice }}</div>
+
+      <p v-else class="hint hint--muted">No AI response yet.</p>
+
+      <h3 class="safety__sub">OutSafe Local Risk</h3>
+
       <p class="risk-line">
-        <span :class="['badge', badgeClass()]">{{ levelText(level) }}</span>
-        <span class="risk-score">Composite Index {{ score }}%</span>
+        <span :class="['badge', badgeClass(level)]">{{ levelDisplay[level] ?? 'Unknown' }}</span>
+        <span class="risk-score">Safety Score {{ score }}</span>
       </p>
 
-      <div v-if="!hasHistory" class="hint hint--warn">
-        Insufficient historical samples, percentiles are for reference only. Requested {{ archiveRequested }} / Success {{ archiveSuccess }} / Valid Days {{ historySampleDays }}.
+      <div class="metric-grid" v-if="percentiles">
+        <div class="metric-card">
+          <div class="metric-label">Wind Percentile</div>
+          <div class="metric-value">{{ percentiles.wind ?? '—' }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Rain Percentile</div>
+          <div class="metric-value">{{ percentiles.rain ?? '—' }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Cold Percentile</div>
+          <div class="metric-value">{{ percentiles.cold ?? '—' }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Years Compared</div>
+          <div class="metric-value">{{ yearsBack ?? '—' }}</div>
+        </div>
       </div>
 
-      <div v-if="reasons().length" class="reason-block">
+      <div v-if="reasons?.length" class="reason-block">
         <h4 class="tiny-title">Key Factors</h4>
         <ul class="reason-list">
-          <li v-for="r in reasons()" :key="r.key">
-            {{ r.label }} · Percentile {{ r.pct }}%
+          <li v-for="r in reasons" :key="r.key">
+            {{ r.label }} · Percentile {{ r.pct }}
           </li>
         </ul>
       </div>
 
-      <div class="comparison">{{ comparison() }}</div>
+      <div v-if="comparisonText" class="comparison">
+        {{ comparisonText }}
+      </div>
+
+      <div v-if="meta?.observed_raw" class="observed-block">
+        <h4 class="tiny-title">Observed Weather</h4>
+        <ul class="reason-list">
+          <li>Wind: {{ meta.observed_raw.wind ?? '—' }}</li>
+          <li>Rain: {{ meta.observed_raw.rain ?? '—' }}</li>
+          <li>Cold / Temp Min: {{ meta.observed_raw.cold ?? '—' }}</li>
+        </ul>
+      </div>
+
+      <div v-if="meta" class="comparison">
+        <div><strong>Data Source:</strong> {{ meta.data_source ?? '—' }}</div>
+        <div><strong>Timezone:</strong> {{ meta.timezone ?? '—' }}</div>
+        <div><strong>Date:</strong> {{ meta.date ?? '—' }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -136,7 +164,7 @@ function levelText(lv) {
 }
 
 .tiny-title {
-  margin: 0.5rem 0 0.25rem;
+  margin: 0.75rem 0 0.35rem;
   font-size: 0.8rem;
   color: var(--muted);
   font-weight: 600;
@@ -155,12 +183,6 @@ function levelText(lv) {
 .hint--err {
   color: #ff9d97;
   margin: 0 0 0.5rem;
-}
-
-.hint--warn {
-  color: var(--warning);
-  margin: 0.5rem 0;
-  font-size: 0.78rem;
 }
 
 .ai-loading {
@@ -199,7 +221,7 @@ function levelText(lv) {
 }
 
 .risk-line {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.5rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -211,8 +233,40 @@ function levelText(lv) {
   color: var(--muted);
 }
 
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.metric-card {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.metric-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.metric-value {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .reason-block {
-  margin-top: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.reason-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  line-height: 1.5;
+  font-size: 0.84rem;
 }
 
 .comparison {
@@ -222,5 +276,9 @@ function levelText(lv) {
   font-size: 0.78rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.observed-block {
+  margin-top: 0.75rem;
 }
 </style>
