@@ -15,15 +15,14 @@ function fmt(value, suffix = '') {
 <template>
   <section v-if="prediction" class="overlay-card next24-card">
     <div class="next24-card__header">
-      <h2>Predicted Weather in 24 Hours</h2>
-      <p>Frontend Random Forest prediction</p>
+      <div>
+        <h3 class="next24-card__title">Predicted Weather in 24 Hours</h3>
+        <p class="muted">Random Forest prediction</p>
+      </div>
+      <span class="next24-card__summary">{{ prediction.summary }}</span>
     </div>
 
-    <h3 class="next24-card__summary">
-      {{ prediction.summary }}
-    </h3>
-
-    <div class="next24-card__grid">
+    <div class="next24-grid">
       <div class="metric">
         <span>High temp</span>
         <strong>{{ fmt(prediction.temp, '°C') }}</strong>
@@ -58,33 +57,47 @@ function fmt(value, suffix = '') {
 
 <style scoped>
 .next24-card {
-  padding: 1rem;
+  padding: 1rem 1.1rem 1.1rem;
+  flex: 0 0 auto;
 }
 
-.next24-card__header h2 {
-  margin: 0;
+.next24-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.9rem;
+}
+
+.next24-card__title {
+  margin: 0 0 0.25rem;
   font-size: 1rem;
-}
-
-.next24-card__header p {
-  margin: 0.25rem 0 0;
-  color: var(--muted);
-  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .next24-card__summary {
-  margin: 0.9rem 0;
-  font-size: 1.15rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(88, 166, 255, 0.16);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
 }
 
-.next24-card__grid {
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.next24-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
 .metric {
-  padding: 0.7rem 0.8rem;
+  padding: 0.75rem 0.8rem;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
 }
@@ -98,5 +111,11 @@ function fmt(value, suffix = '') {
 
 .metric strong {
   font-size: 0.96rem;
+}
+
+@media (max-width: 480px) {
+  .next24-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
