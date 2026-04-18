@@ -5,6 +5,8 @@ import LocationPicker from './components/LocationPicker.vue'
 import SafetyResult from './components/SafetyResult.vue'
 import { fetchSafetyRecommendation } from './utils/api'
 import { fetchAiAdvice } from './api/ai'
+import { fetchPredicted24h } from './api/prediction'
+import Next24hPrediction from './components/Next24hPrediction.vue'
 
 const lat = ref(41.4993)
 const lon = ref(-81.6944)
@@ -16,6 +18,8 @@ const result = ref(null)
 const aiAdvice = ref('')
 const aiAdviceLoading = ref(false)
 const aiAdviceError = ref('')
+
+const predicted24h = ref(null)
 
 function onMapSelect({ lat: la, lon: lo }) {
   lat.value = Math.round(la * 1e5) / 1e5
@@ -36,6 +40,7 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
 
   lat.value = subLat
   lon.value = subLon
+  predicted24h.value = null
 
   try {
     const data = await fetchSafetyRecommendation({
@@ -45,8 +50,29 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
       yearsBack,
       timezone: 'America/New_York',
     })
-
+    
+    console.log('safety data:', data)
+    console.log('diagram_metrics:', data?.diagram_metrics)
     result.value = data
+   
+    if (data?.diagram_metrics) {
+      try {
+        predicted24h.value = await fetchPredicted24h({
+          temp_max: data.diagram_metrics.temp_max,
+          temp_min: data.diagram_metrics.temp_min,
+          apparent_min: data.diagram_metrics.apparent_min,
+          humidity_max: data.diagram_metrics.humidity_max,
+          precip_sum: data.diagram_metrics.precip_sum,
+          wind_max: data.diagram_metrics.wind_max,
+          gust_max: data.diagram_metrics.gust_max,
+        })
+        console.log('predicted24h:', predicted24h.value)
+      } catch (e) {
+        console.error('Prediction failed:', e)
+      }
+    } else {
+      console.warn('diagram_metrics missing from backend response')
+    }
 
     // 以后这里接第二个 AI API
     if (isAdviceApiConfigured()) {
@@ -91,22 +117,29 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
         {{ error }}
       </div>
 
+      <template v-else>
       <SafetyResult
-        v-else-if="result"
+        v-if="result"
         overlay
         :level="result.level"
         :score="result.score"
         :percentiles="result.percentiles"
-        :years-back="result.years_back ?? result.yearsBack"
+        :years-back="result.years_back"
         :reasons="result.reasons"
-        :comparison-text="result.comparison_text ?? result.comparisonText"
+        :comparison-text="result.comparison_text"
         :meta="result.meta"
-        :diagram-metrics="result.diagram_metrics ?? result.diagramMetrics"
+        :diagram-metrics="result.diagram_metrics"
         :advice-api-configured="isAdviceApiConfigured()"
         :ai-advice="aiAdvice"
         :ai-advice-loading="aiAdviceLoading"
         :ai-advice-error="aiAdviceError"
       />
+
+      <Next24hPrediction
+          v-if="predicted24h"
+          :prediction="predicted24h"
+        />
+      </template>
     </aside>
   </div>
 </template>
@@ -163,7 +196,8 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   pointer-events: none;
 }
 
@@ -176,9 +210,9 @@ async function onLocationSubmit({ lat: subLat, lon: subLon, elevation, yearsBack
 }
 
 .map-app__sidebar > .safety--overlay {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 @media (max-width: 640px) {
